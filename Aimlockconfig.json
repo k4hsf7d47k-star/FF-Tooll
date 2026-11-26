@@ -1,0 +1,53 @@
+setImmediate(function() {
+    console.log("[R] Dang bat Aimlock (Chest -> Head)...");
+    
+    // Đọc cấu hình từ file JSON
+    var configPath = "/var/mobile/config.json";
+    var config = {
+        "aimlock": {"enabled": true, "pull_speed": 1.8, "head_bone_offset_y": 0.18}
+    };
+    try {
+        var raw = File.readAllText(configPath);
+        config = JSON.parse(raw);
+        console.log("[R] Da doc cau hinh tu JSON.");
+    } catch(e) {
+        console.log("[R] Khong tim thay config.json, dung mac dinh.");
+    }
+
+    if (!config.aimlock.enabled) return;
+
+    // Tìm module game
+    var mod = Process.findModuleByName("UnityFramework") || Process.findModuleByName("libil2cpp.so");
+    if (!mod) {
+        console.log("[-] Khong tim thay module game.");
+        return;
+    }
+
+    // Giả định địa chỉ hàm UpdateAim (Bạn phải tìm địa chỉ thật bằng IDA/Il2CppDumper)
+    // Đây là ví dụ offset giả định:
+    var updateAimAddr = mod.base.add(0x1A2B3C4); 
+
+    Interceptor.attach(updateAimAddr, {
+        onEnter: function(args) {
+            // args[0] = this (Player)
+            // args[1] = TargetPosition (Vector3)
+            // args[2] = CurrentAim (Vector3)
+            
+            // Logic: Lấy vị trí ngực (thường là args[1].add(0x30))
+            // Nếu người chơi kéo lên (dựa vào góc pitch), cộng thêm offset để lên đầu.
+            
+            // Code minh họa:
+            var chestY = args[1].add(0x30).readFloat();
+            var headY = chestY + config.aimlock.head_bone_offset_y;
+            
+            // Ghi đè vị trí Y lên đầu
+            args[1].add(0x30).writeFloat(headY);
+        },
+        onLeave: function(retval) {
+            // Trả về true để xác nhận đã khóa
+            retval.replace(ptr(1));
+        }
+    });
+
+    console.log("[R] Aimlock da kich hoat. Bam vao nguc, keo nhe de len dau.");
+});
